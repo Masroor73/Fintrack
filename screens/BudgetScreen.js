@@ -6,137 +6,120 @@ import {
   Text,
   TextInput,
   Button,
-  Alert,
   StyleSheet,
-  Platform,
-  StatusBar,
+  Alert,
+  SafeAreaView,
 } from 'react-native';
 import { supabase } from '../lib/supabase';
 import { useFocusEffect } from '@react-navigation/native';
+import { format } from 'date-fns';
 
 export default function BudgetScreen() {
-  const [currentBudget, setCurrentBudget] = useState(null);
-  const [newBudget, setNewBudget] = useState('');
-  const [userId, setUserId] = useState(null);
+  const [budget, setBudget] = useState('');
+  const [inputBudget, setInputBudget] = useState('');
 
-  // Refetch when tab is focused
+  const currentMonth = format(new Date(), 'MMMM yyyy');
+
+  const fetchBudget = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const { data, error } = await supabase
+      .from('budgets')
+      .select('amount')
+      .eq('user_id', user.id)
+      .eq('month', currentMonth)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single();
+
+    if (error && error.code !== 'PGRST116') {
+      Alert.alert('Error', error.message);
+      return;
+    }
+
+    setBudget(data?.amount?.toFixed(2) || '0.00');
+  };
+
+  const updateBudget = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return Alert.alert('Error', 'User not found');
+
+    const numericAmount = parseFloat(inputBudget);
+    if (isNaN(numericAmount) || numericAmount <= 0) {
+      return Alert.alert('Invalid Input', 'Please enter a valid amount.');
+    }
+
+    const { error } = await supabase.from('budgets').insert([
+      {
+        user_id: user.id,
+        amount: numericAmount,
+        month: currentMonth,
+      },
+    ]);
+
+    if (error) {
+      Alert.alert('Error', error.message);
+    } else {
+      setInputBudget('');
+      fetchBudget(); // Refresh budget immediately
+      Alert.alert('Success', 'Budget updated!');
+    }
+  };
+
   useFocusEffect(
     useCallback(() => {
       fetchBudget();
     }, [])
   );
 
-  const fetchBudget = async () => {
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser();
-
-    if (userError || !user) {
-      Alert.alert('Error', 'Failed to get user');
-      return;
-    }
-
-    setUserId(user.id);
-
-    const { data, error } = await supabase
-      .from('budget')
-      .select('amount')
-      .eq('user_id', user.id)
-      .single();
-
-    if (error && error.code !== 'PGRST116') {
-      // Not found code: still fine
-      Alert.alert('Error', error.message);
-      return;
-    }
-
-    if (data) {
-      setCurrentBudget(parseFloat(data.amount));
-    } else {
-      setCurrentBudget(0);
-    }
-  };
-
-  const handleUpdateBudget = async () => {
-    const amount = parseFloat(newBudget);
-    if (isNaN(amount) || amount <= 0) {
-      Alert.alert('Invalid Input', 'Please enter a valid budget amount.');
-      return;
-    }
-
-    // Try updating first
-    const { error: updateError } = await supabase
-      .from('budget')
-      .update({ amount })
-      .eq('user_id', userId);
-
-    if (updateError) {
-      // If no row to update, insert
-      const { error: insertError } = await supabase
-        .from('budget')
-        .insert({ user_id: userId, amount });
-
-      if (insertError) {
-        Alert.alert('Error', insertError.message);
-        return;
-      }
-    }
-
-    setNewBudget('');
-    fetchBudget(); // Refresh current budget
-    Alert.alert('Success', 'Budget updated successfully!');
-  };
-
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       <Text style={styles.title}>Monthly Budget</Text>
-      <Text style={styles.currentBudget}>
-        Current Budget: $
-        {currentBudget !== null ? currentBudget.toFixed(2) : 'Loading...'}
-      </Text>
+      <Text style={styles.label}>Current Budget: ${budget ? budget : 'Loading...'}</Text>
 
       <TextInput
         style={styles.input}
-        value={newBudget}
-        onChangeText={setNewBudget}
         placeholder="Enter new budget"
+        value={inputBudget}
+        onChangeText={setInputBudget}
         keyboardType="numeric"
       />
 
-      <Button title="Update Budget" onPress={handleUpdateBudget} />
-    </View>
+      <Button title="Update Budget" onPress={updateBudget} />
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight + 20 : 60,
-    paddingHorizontal: 20,
+    padding: 20,
+    paddingTop: 60,
     backgroundColor: '#fff',
   },
   title: {
     fontSize: 26,
     fontWeight: 'bold',
     textAlign: 'center',
-    marginBottom: 30,
-  },
-  currentBudget: {
-    fontSize: 18,
-    color: 'green',
-    textAlign: 'center',
     marginBottom: 20,
+  },
+  label: {
+    textAlign: 'center',
+    fontSize: 18,
+    marginBottom: 10,
+    color: 'green',
   },
   input: {
     borderWidth: 1,
     borderColor: '#ccc',
     padding: 12,
-    fontSize: 16,
     borderRadius: 8,
     marginBottom: 20,
+    fontSize: 16,
   },
 });
+
 
 
 
