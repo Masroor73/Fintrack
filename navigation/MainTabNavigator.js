@@ -7,7 +7,7 @@ import AddExpenseScreen from '../screens/AddExpenseScreen';
 import ExpenseHistoryScreen from '../screens/ExpenseHistoryScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import BudgetScreen from '../screens/BudgetScreen';
-import EditExpenseScreen from '../screens/EditExpenseScreen'; // 👈 Added import
+import EditExpenseScreen from '../screens/EditExpenseScreen';
 
 const Tab = createBottomTabNavigator();
 
